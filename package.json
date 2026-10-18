@@ -1,0 +1,9 @@
+{
+  "name": "la-liste-infernale",
+  "version": "1.0.0",
+  "description": "Jeu de culture en ligne de 2 à 4 joueurs",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "8.18.0" }
+}
