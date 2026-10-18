@@ -226,6 +226,22 @@ label.lbl{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing
 .draw-result{animation:pop .35s}
 .rare-tag{background:var(--sun);color:var(--ink);border-color:var(--paper)}
 .bonus-line{font-weight:800;text-align:center;color:var(--ink);background:var(--sun);border:2px solid var(--ink);border-radius:99px;padding:4px 14px;align-self:center}
+.rtable{display:flex;flex-direction:column;gap:8px;width:100%;max-width:640px}
+.rrow{display:grid;grid-template-columns:minmax(0,1.4fr) auto auto auto;gap:12px;align-items:center;padding:8px 12px;border:2px solid var(--ink);border-radius:12px;background:#fff;text-align:left;font-weight:700}
+.rrow.ok>b{color:var(--ok)}.rrow.ko>b{color:var(--bad)}
+.rtable .rrow:has(> :nth-child(2):last-child){grid-template-columns:minmax(0,1fr) auto}
+.progress .chip.ok{background:var(--ok);color:#fff}
+.turnboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tcard{background:var(--paper);border:3px solid var(--ink);border-radius:14px;box-shadow:var(--sh-s);padding:10px 12px;display:flex;flex-direction:column;gap:6px;transition:transform .12s;min-width:0}
+.tcard .nm{display:flex;gap:6px;align-items:center;min-width:0}.tcard .nm b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tcard .clk{font-family:var(--f-display);font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
+.tcard .tp{font-weight:800;color:var(--muted)}
+.tcard .ts{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.06em;min-height:18px}
+.tcard .bar{height:8px;border:2px solid var(--ink);border-radius:99px;background:#fff;overflow:hidden}.tcard .bar i{display:block;height:100%;background:var(--c)}
+.tcard.now{background:var(--sun);transform:translateY(-4px) rotate(-1deg);box-shadow:6px 6px 0 var(--ink)}
+.tcard.now.low .clk{color:var(--bad)}
+.tcard.out{opacity:.45}.tcard.out .ts{color:var(--bad)}
+@media (max-width:520px){.rrow{grid-template-columns:1fr 1fr}}
 .feed{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;padding:10px;border:3px solid var(--ink);border-radius:14px;background:#fff}
 .feed:empty::before{content:"Les réponses apparaîtront ici.";color:var(--muted);font-weight:700}
 .msg{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;padding:6px 10px;border-radius:10px;border:2px solid var(--ink);animation:pop .2s;min-width:0}
@@ -416,7 +432,12 @@ function bonusFrom(st){
 
 /* ========== règles ========== */
 const VOTE_MS=20000,DRAW_MS=3800,BET_MS=15000,REVEAL_MS=4000,AUC_MS=10000,COUNT_MS=3000,GRACE_MS=2500,RESULT_MS=15000;
-const MAX_BET=30,BASE_TIME=40,MAX_PLAYERS=6;
+const MAX_BET=30,BASE_TIME=40,MAX_PLAYERS=6,CHAIN_MS=30000;
+const GMODES=[
+  {k:'pari',l:'Le plus gros pari',d:'Chacun parie en secret. Le plus gros pari joue la manche (avec son équipe). Raté : les adversaires marquent ses points.'},
+  {k:'defi',l:'Chacun son pari',d:'Chacun parie, puis tout le monde tente son propre pari en même temps. Réussi : tu marques ton pari. Raté : tes adversaires le marquent.'},
+  {k:'chaine',l:'Chacun son tour',d:'Pas de pari : une réponse chacun son tour, avec 30 s de réserve par joueur. Erreur, répétition ou temps écoulé : éliminé de la manche. 1 point par bonne réponse.'}];
+const gmodeOf=k=>GMODES.find(x=>x.k===k)||GMODES[0];
 const TEAM_NAMES=['Équipe Braise','Équipe Soufre','Équipe Cendre'];
 const TEAM_COLORS=['var(--p0)','var(--p2)','var(--p1)'];
 const COLORS=['var(--p0)','var(--p1)','var(--p2)','var(--p3)','var(--p4)','var(--p5)'];
@@ -461,7 +482,7 @@ const G={
   entMembers:(g,e)=>/^t\d$/.test(e)?g.players.filter(p=>'t'+p.t===e).map(p=>p.n).join(' & '):'',
   runMembers:g=>G.members(g,g.runEnt),
 };
-function newGame(players,goal,layout){return{v:0,code:S.code,phase:'lobby',players,goal:goal||'p50',layout:layout||'solo',round:0,sc:{},jk:{},prop:[],dl:0}}
+function newGame(players,goal,layout,gm){return{v:0,code:S.code,phase:'lobby',players,goal:goal||'p50',layout:layout||'solo',gm:gm||'pari',round:0,sc:{},prop:[],dl:0}}
 function pick3(g){
   const used=new Set(g.prop);
   const fresh=f=>TH.filter(t=>t.f===f&&!used.has(t.ti));
@@ -483,7 +504,7 @@ function startGame(g){
 }
 function nextRound(g){
   g.round++;g.opts=pick3(g);g.prop.push(...g.opts);
-  g.votes={};g.theme=null;g.ballots=null;g.bets=null;g.betDone=[];g.auc=null;g.runner=null;g.runEnt=null;g.bet=null;g.res=null;g.tied=null;g.bonus=null;
+  g.votes={};g.theme=null;g.ballots=null;g.turn=null;g.bets=null;g.betDone=[];g.auc=null;g.runner=null;g.runEnt=null;g.bet=null;g.res=null;g.tied=null;g.bonus=null;
   g.phase='vote';g.dl=now()+VOTE_MS;
 }
 function toJokers(g,runner,bet){g.runner=runner;g.runEnt=G.entOf(g,runner);g.bet=bet;toPlay(g)}
@@ -492,15 +513,15 @@ function toPlay(g){
   g.st=now()+COUNT_MS;g.dl=g.st+g.dur*1000;g.phase='play';
 }
 /* réponses mises en commun de l'équipe qui joue : [{p, w, c, k, ts}] triées dans l'ordre */
-function feed(g){
+function feed(g,mem){
   const out=[];
-  for(const pid of G.runMembers(g)){const a=actsOf(pid).ans;if(!a||a.r!==g.round||!Array.isArray(a.att))continue;
+  for(const pid of (mem||G.runMembers(g))){const a=actsOf(pid).ans;if(!a||a.r!==g.round||!Array.isArray(a.att))continue;
     for(const x of a.att)if(Array.isArray(x))out.push({p:pid,w:String(x[0]||'').slice(0,40),c:x[1]?String(x[1]).slice(0,60):'',ts:+x[2]||0})}
   out.sort((a,b)=>a.ts-b.ts);
   const seen=new Set();for(const x of out){if(x.c){x.dup=seen.has(x.c);seen.add(x.c)}}
   return out;
 }
-const pooled=g=>{const s=[];const seen=new Set();for(const x of feed(g))if(x.c&&!seen.has(x.c)){seen.add(x.c);s.push(x.c)}return s};
+const pooled=(g,mem)=>{const s=[];const seen=new Set();for(const x of feed(g,mem))if(x.c&&!seen.has(x.c)){seen.add(x.c);s.push(x.c)}return s};
 const isRare=(g,th,c)=>!!(g.bonus&&g.bonus.on&&!g.bonus.common.includes(keyOf(th,c)));
 function finish(g){
   const th=TH[g.theme];const seen=new Set();const list=[];const keys=[];
@@ -512,14 +533,52 @@ function finish(g){
   if(g.solo)gains[g.runEnt]=ok?g.bet+bonusPts:-(g.bet-found); /* solo : raté = on perd l'écart */
   else if(ok)gains[g.runEnt]=(g.bet+bonusPts)*g.mult;else for(const e of G.ents(g))if(e!==g.runEnt)gains[e]=g.bet*g.mult;
   for(const e in gains)g.sc[e]=(g.sc[e]||0)+gains[e];
-  /* « Il y avait aussi » : les 3 réponses les plus souvent citées par les joueurs (sinon les plus classiques de la liste) */
+  const missed=missedFor(g,th,seen);
+  g.res={mode:'pari',ok,found,list:list.slice(0,30),rare:rare.slice(0,20),bonusPts,gains,missed};
+  g.phase='result';g.dl=now()+RESULT_MS;
+  Stats.record(th.id,keys);
+}
+/* « Les plus citées que vous avez ratées » : les 3 réponses les plus souvent citées par les joueurs (sinon les plus classiques de la liste) */
+const canonOf=(th,k)=>th.rule?(k[0]==='n'?k.slice(1):k):((th.items.find(i=>i.k===k)||{}).c||k);
+function missedFor(g,th,seen){
   const byKey=new Map(th.items.map(i=>[i.k,i.c]));const missed=[];
   for(const k of ((g.bonus&&g.bonus.top)||[])){const c=th.rule?(k[0]==='n'?k.slice(1):null):byKey.get(k);if(c&&!seen.has(c)&&!missed.includes(c))missed.push(c);if(missed.length>=3)break}
   const pool=th.rule?ruleSamples(th.rule):th.items.map(i=>i.c);
   for(const c of pool){if(missed.length>=3)break;if(!seen.has(c)&&!missed.includes(c))missed.push(c)}
-  g.res={ok,found,list:list.slice(0,30),rare:rare.slice(0,20),bonusPts,gains,missed};
-  g.phase='result';g.dl=now()+RESULT_MS;
-  Stats.record(th.id,keys);
+  return missed;
+}
+/* --- mode « Chacun son pari » --- */
+function toPlayAll(g){g.runner=null;g.runEnt=null;g.bet=null;g.dur=BASE_TIME;g.mult=1;g.st=now()+COUNT_MS;g.dl=g.st+g.dur*1000;g.phase='play'}
+function finishDefi(g){
+  const th=TH[g.theme];const gains={};const per=[];const allSeen=new Set();const allKeys=new Set();
+  for(const p of g.players){const seen=new Set();const list=[];const keys=[];
+    for(const c of pooled(g,[p.id])){const m=match(th,c,seen);if(m&&!seen.has(m.c)){seen.add(m.c);list.push(m.c);keys.push(m.k)}}
+    const bet=g.bets[p.id]||1;const ok=list.length>=bet;const rare=g.bonus&&g.bonus.on?keys.filter(k=>!g.bonus.common.includes(k)).length:0;
+    const e=G.entOf(g,p.id);
+    if(ok)gains[e]=(gains[e]||0)+bet+rare;else for(const o of G.ents(g))if(o!==e)gains[o]=(gains[o]||0)+bet;
+    per.push({p:p.id,bet,found:list.length,ok,rare:ok?rare:0,list:list.slice(0,10)});list.forEach(c=>allSeen.add(c));keys.forEach(k=>allKeys.add(k));
+  }
+  for(const e in gains)g.sc[e]=(g.sc[e]||0)+gains[e];
+  g.res={mode:'defi',per,gains,missed:missedFor(g,th,allSeen)};g.phase='result';g.dl=now()+RESULT_MS;
+  Stats.record(th.id,[...allKeys]);
+}
+/* --- mode « Chacun son tour » --- */
+function nextAlive(T,from){const n=T.order.length;for(let i=1;i<=n;i++){const j=(from+i)%n;if(T.alive[T.order[j]])return j}return -1}
+function startTurns(g){
+  const t=now();const ps=g.players.map(p=>p.id);const off=(g.round-1)%ps.length;const order=ps.slice(off).concat(ps.slice(0,off));
+  const T={order,cur:0,alive:{},clock:{},pts:{},since:t+COUNT_MS,k:0,said:[],log:[]};
+  for(const p of order){T.alive[p]=present(p)?1:0;T.clock[p]=CHAIN_MS;T.pts[p]=0}
+  g.turn=T;g.st=T.since;g.phase='turns';
+  const j=nextAlive(T,order.length-1);if(j<0)finishChaine(g);else T.cur=j;
+}
+function turnAdvance(g,t){const T=g.turn;T.k++;if(T.log.length>24)T.log=T.log.slice(-24);const j=nextAlive(T,T.cur);if(j<0){finishChaine(g);return}T.cur=j;T.since=t}
+function finishChaine(g){
+  const T=g.turn;const th=TH[g.theme];const gains={};
+  for(const p of T.order){const e=G.entOf(g,p);gains[e]=(gains[e]||0)+(T.pts[p]||0)}
+  for(const e in gains)g.sc[e]=(g.sc[e]||0)+gains[e];
+  const list=T.said.map(k=>canonOf(th,k));const seen=new Set(list);
+  g.res={mode:'chaine',gains,pts:{...T.pts},list:list.slice(0,40),rare:g.bonus&&g.bonus.on?T.said.filter(k=>!g.bonus.common.includes(k)).map(k=>canonOf(th,k)).slice(0,20):[],missed:missedFor(g,th,seen)};
+  g.phase='result';g.dl=now()+RESULT_MS;Stats.record(th.id,T.said);
 }
 function afterResult(g){
   const es=G.ents(g);const top=Math.max(...es.map(e=>g.sc[e]||0));
@@ -560,12 +619,26 @@ function step(){
         Stats.get(TH[ti].id).then(st=>{if(S.g&&S.g.theme===ti&&S.g.round===r){S.g.bonus=bonusFrom(st);push()}});
       }
       break}
-    case 'draw':{if(t>g.dl){g.phase='bet';g.dl=t+BET_MS;g.betDone=[];ch=true}break}
+    case 'draw':{if(t>g.dl){if(g.gm==='chaine')startTurns(g);else{g.phase='bet';g.dl=t+BET_MS;g.betDone=[]}ch=true}break}
+    case 'turns':{
+      const T=g.turn;if(t<T.since)break;
+      const cur=T.order[T.cur];const el=t-T.since;const a=A(cur).tp;
+      if(a&&a.r===r&&a.k===T.k&&typeof a.w==='string'){
+        T.clock[cur]=Math.max(0,T.clock[cur]-el);
+        const th=TH[g.theme];const w=a.w.slice(0,40);const m=match(th,w,new Set(T.said.map(k=>canonOf(th,k))));
+        if(!m){T.alive[cur]=0;T.log.push({p:cur,w,x:'ko'})}
+        else if(T.said.includes(m.k)){T.alive[cur]=0;T.log.push({p:cur,w,c:m.c,x:'dup'})}
+        else{T.said.push(m.k);const rare=!!(g.bonus&&g.bonus.on&&!g.bonus.common.includes(m.k));T.pts[cur]+=1+(rare?1:0);T.log.push({p:cur,w,c:m.c,x:'ok',rare:rare?1:0})}
+        turnAdvance(g,t);ch=true;
+      }else if(T.clock[cur]-el<=0||(!present(cur)&&el>3000)){T.clock[cur]=0;T.alive[cur]=0;T.log.push({p:cur,w:'',x:'time'});turnAdvance(g,t);ch=true}
+      break}
     case 'bet':{
       const done=g.players.filter(p=>{const b=A(p.id).bet;return b&&b.r===r}).map(p=>p.id);
       if(done.length!==g.betDone.length){g.betDone=done;ch=true}
       const all=g.players.filter(p=>present(p.id)).every(p=>done.includes(p.id));
       if(g.solo&&(all||t>g.dl)){const b=A(g.players[0].id).bet;const n=clamp(Math.round(+(b&&b.r===r?b.n:1))||1,1,MAX_BET);g.bets={[g.players[0].id]:n};toJokers(g,g.players[0].id,n);ch=true;break}
+      if(g.gm==='defi'&&(all||t>g.dl)){const bets={};for(const p of g.players){const b=A(p.id).bet;bets[p.id]=clamp(Math.round(+(b&&b.r===r?b.n:1))||1,1,MAX_BET)}
+        g.bets=bets;g.tied=[];g.phase='reveal';g.dl=t+REVEAL_MS;ch=true;break}
       if(all||t>g.dl){
         const bets={};for(const p of g.players){const b=A(p.id).bet;bets[p.id]=(b&&b.r===r)?clamp(Math.round(+b.n)||0,0,MAX_BET):0}
         const max=Math.max(...Object.values(bets));const pres=g.players.filter(p=>present(p.id));
@@ -573,6 +646,7 @@ function step(){
         g.phase='reveal';g.dl=t+REVEAL_MS;ch=true}
       break}
     case 'reveal':{
+      if(t>g.dl&&g.gm==='defi'){toPlayAll(g);ch=true;break}
       if(t>g.dl){
         if(g.tied.length>1&&g.max<MAX_BET){g.auc={ids:g.tied.slice(),turn:0,val:g.max,s:1,log:[]};g.phase='auction';g.dl=t+AUC_MS}
         else toJokers(g,g.tied[rnd(g.tied.length)],g.max);
@@ -588,6 +662,9 @@ function step(){
         g.dl=t+AUC_MS}
       break}
     case 'play':{
+      if(g.gm==='defi'){const pres=g.players.filter(p=>present(p.id));
+        const done=pid=>{const a=A(pid).ans;return pooled(g,[pid]).length>=(g.bets[pid]||1)||(a&&a.r===r&&a.done)};
+        if((pres.length&&pres.every(p=>done(p.id))&&t>=g.st)||t>g.dl+GRACE_MS){finishDefi(g);ch=true}break}
       const mem=G.runMembers(g);const n=pooled(g).length;
       const pres=mem.filter(present);
       const allDone=pres.length>0&&pres.every(pid=>{const a=A(pid).ans;return a&&a.r===r&&a.done});
@@ -597,8 +674,14 @@ function step(){
   }
   if(ch)push();
 }
+function slim(g){
+  const lim=window.LI_STATS_API?15000:3800;if(JSON.stringify(g).length<lim)return;
+  if(g.turn)g.turn.log=g.turn.log.slice(-8);
+  if(g.res){if(g.res.list)g.res.list=g.res.list.slice(0,12);if(g.res.per)g.res.per.forEach(x=>x.list=x.list.slice(0,4))}
+  if(g.bonus&&JSON.stringify(g).length>lim)g.bonus.top=g.bonus.top.slice(0,6);
+}
 function push(){
-  const g=S.g;g.v++;
+  const g=S.g;g.v++;slim(g);
   if(S.mode==='online'){LS.set('li-host',{code:S.code,pid:ME.pid,g,t:now()});if(S.nr)S.nr.presence({g,now:now()}).catch(()=>{})}
 }
 
@@ -621,7 +704,7 @@ async function goOnline(create,code,resume){
   S.code=code;S.isHost=create;S.mode='online';S.joinAt=now();S.my={};S.off=null;S.g=null;
   try{S.nr=await roomNS.join('li-'+code.toLowerCase())}catch(e){S.mode=null;toast('Impossible de rejoindre la salle ('+(e&&e.code||'erreur')+').');renderHome();return}
   const base={pid:ME.pid,n:ME.name,code};
-  if(create){S.g=resume||newGame([{id:ME.pid,n:ME.name,c:0,t:0}],LS.get('li-goal','p50'),'solo');S.g.code=code;Object.assign(base,{host:true,g:S.g,now:now()})}
+  if(create){S.g=resume||newGame([{id:ME.pid,n:ME.name,c:0,t:0}],LS.get('li-goal','p50'),'solo',LS.get('li-gm','pari'));S.g.code=code;Object.assign(base,{host:true,g:S.g,now:now()})}
   try{await S.nr.presence(base)}catch(e){}
   S.nr.onPeers(onPeers,()=>{});
   if(create)push();
@@ -637,11 +720,11 @@ function startSolo(){
   S.mode='local';S.isHost=true;S.code='SOLO';S.local={};S.ans={};
   S.g=newGame([{id:'L0',n:ME.name||'Toi',c:0,t:0}],'s80','solo');S.g.solo=true;startGame(S.g);S.g.v=1;render(true);
 }
-function startLocal(names,layout,goal){
+function startLocal(names,layout,goal,gm){
   S.mode='local';S.isHost=true;S.code='LOCAL';S.local={};S.ans={};
   const players=names.map((n,i)=>({id:'L'+i,n,c:i,t:0}));
   const k=layoutOf(names.length,layout).teams;if(k)players.forEach((p,i)=>p.t=i%k);
-  S.g=newGame(players,goal,layout);startGame(S.g);S.g.v=1;render(true);
+  S.g=newGame(players,goal,layout,gm);startGame(S.g);S.g.v=1;render(true);
 }
 const genCode=()=>{const A='ABCDEFGHJKLMNPQRSTUVWXYZ';let s='';for(let i=0;i<4;i++)s+=A[rnd(A.length)];return s};
 
@@ -655,6 +738,7 @@ function seg(label,opts,cur,onPick,disabled){
 function rulesBox(){
   return h('section',{class:'card rules'},h('details',null,h('summary',null,'Les règles'),
     h('ol',null,
+      h('li',null,'Trois façons de jouer : « Le plus gros pari » (règles ci-dessous), « Chacun son pari » (tout le monde tente son propre pari en même temps) et « Chacun son tour » (pas de pari, une réponse chacun son tour, 30 s de réserve par joueur, éliminé à la première erreur ou répétition, 1 point par bonne réponse).'),
       h('li',null,'À chaque manche, 3 thèmes sont proposés (toujours un thème pop culture, jamais deux fois le même dans la partie). Chacun vote pour son préféré, puis le thème est tiré au sort parmi tous les votes.'),
       h('li',null,'Chacun a 15 secondes pour parier combien de réponses il peut citer en 40 secondes (maximum 30).'),
       h('li',null,'Le plus gros pari joue la manche. En cas d’égalité, les ex æquo surenchérissent de +1 chacun leur tour jusqu’à ce qu’un seul reste. En équipe, toute l’équipe du parieur joue et les réponses sont mises en commun.'),
@@ -682,7 +766,7 @@ function renderHome(){
     h('div',{class:'row'},codeInp,joinBtn),
     canResume?h('div',{class:'row'},h('button',{class:'btn alt sm',onclick:()=>{ME.name=ME.name||'Hôte';goOnline(true,saved.code,saved.g)}},'Reprendre la partie '+saved.code)):null);
   // un seul écran
-  let count=clamp(LS.get('li-local-n',2),2,6);let layout=LS.get('li-local-layout','solo');let goal=LS.get('li-goal','p50');
+  let count=clamp(LS.get('li-local-n',2),2,6);let layout=LS.get('li-local-layout','solo');let goal=LS.get('li-goal','p50');let gm=LS.get('li-gm','pari');
   const localNames=LS.get('li-local-names',['','','','','','']);
   const box=h('div',{class:'col'});
   const draw=()=>{
@@ -694,6 +778,7 @@ function renderHome(){
       ...Array.from({length:count},(_,i)=>{const inp=h('input',{class:'inp',id:'lp'+i,maxlength:16,placeholder:`Joueur ${i+1}`+(k?` (${TEAM_NAMES[i%k]})`:''),value:localNames[i]||''});
         inp.addEventListener('input',()=>{localNames[i]=inp.value.trim();LS.set('li-local-names',localNames)});
         return h('div',{class:'row',style:'flex-wrap:nowrap'},h('span',{class:'dot',style:`--c:${k?TEAM_COLORS[i%k]:COLORS[i]}`}),inp)}),
+      h('div',{class:'col',style:'gap:6px'},h('span',{class:'lbl'},'Façon de jouer'),seg('Façon de jouer',GMODES,gm,v=>{gm=v;LS.set('li-gm',v);draw()}),h('span',{class:'muted',style:'font-size:14px;font-weight:700'},gmodeOf(gm).d)),
       h('div',{class:'col',style:'gap:6px'},h('span',{class:'lbl'},'Fin de partie'),h('div',{class:'goal-wrap'},seg('Objectif',GOALS.filter(x=>!x.hidden),goal,v=>{goal=v;LS.set('li-goal',v);draw()})))].filter(Boolean));
   };
   draw();
@@ -701,9 +786,10 @@ function renderHome(){
     h('h3',{class:'disp',style:'font-size:22px'},'Un seul écran'),
     h('p',{class:'muted',style:'margin:0;font-weight:600'},'On se passe l’appareil. Les paris se tapent en secret.'),
     box,
-    h('div',{class:'row'},h('button',{class:'btn',onclick:()=>{const names=Array.from({length:count},(_,i)=>(localNames[i]||'').trim()||`Joueur ${i+1}`);startLocal(names,layout,goal)}},'Commencer')));
-  const voiceOk=window.LI_VOICE&&(window.SpeechRecognition||window.webkitSpeechRecognition);
-  let vseg=null;if(voiceOk){vseg=h('div',{class:'row'});const d=()=>vseg.replaceChildren(h('span',{class:'lbl'},'Je réponds'),seg('Façon de répondre',[{k:0,l:'Au clavier'},{k:1,l:'À la voix (micro)'}],voiceOn()?1:0,v=>{LS.set('li-voice',!!v);d()}),h('span',{class:'muted',style:'font-size:14px;font-weight:700'},'Le micro ne sert que quand tu joues seul. Le clavier reste toujours utilisable.'));d()}
+    h('div',{class:'row'},h('button',{class:'btn',onclick:()=>{const names=Array.from({length:count},(_,i)=>(localNames[i]||'').trim()||`Joueur ${i+1}`);startLocal(names,layout,goal,gm)}},'Commencer')));
+  const voiceOk=window.LI_VOICE&&SR_OK;
+  let vseg=null;if(window.LI_VOICE&&!SR_OK)vseg=h('p',{class:'note',style:'margin:0'},'Le mode micro n’est pas disponible sur ce navigateur (Firefox ne gère pas la reconnaissance vocale). Pour jouer à la voix, utilise Chrome, Edge ou Safari.');
+  if(voiceOk){vseg=h('div',{class:'row'});const d=()=>vseg.replaceChildren(h('span',{class:'lbl'},'Je réponds'),seg('Façon de répondre',[{k:0,l:'Au clavier'},{k:1,l:'À la voix (micro)'}],voiceOn()?1:0,v=>{LS.set('li-voice',!!v);d()}),h('span',{class:'muted',style:'font-size:14px;font-weight:700'},'Le micro ne sert que quand tu joues seul. Le clavier reste toujours utilisable.'));d()}
   const best=LS.get('li-solo-best',null);
   const solo=h('section',{class:'card col'},
     h('h3',{class:'disp',style:'font-size:22px'},'Solo'),
@@ -768,7 +854,7 @@ function renderSuggest(){
 function goalLabel(g){const go=goalOf(g.goal);return go.type==='pts'?'Objectif '+go.v+' pts':'Manche '+Math.min(g.round,go.v)+' / '+go.v+(g.round>go.v?' (départage)':'')}
 function hud(g){
   const es=G.ents(g);const go=goalOf(g.goal);const top=Math.max(1,...es.map(e=>g.sc[e]||0));
-  const meta=h('div',{class:'meta'},h('span',null,g.solo?'Solo':S.mode==='local'?'Un seul écran':'Partie '+S.code),go.type==='pts'?[h('b',null,'Manche '+g.round),h('span',null,'Objectif '+go.v+' pts')]:[h('b',null,'Manche '+g.round+' / '+go.v),g.round>go.v?h('span',null,'Départage'):h('span',null,'Fin après '+go.v+' manches')]);
+  const meta=h('div',{class:'meta'},h('span',null,(g.solo?'Solo':S.mode==='local'?'Un seul écran':'Partie '+S.code)+(g.solo?'':' · '+gmodeOf(g.gm).l)),go.type==='pts'?[h('b',null,'Manche '+g.round),h('span',null,'Objectif '+go.v+' pts')]:[h('b',null,'Manche '+g.round+' / '+go.v),g.round>go.v?h('span',null,'Départage'):h('span',null,'Fin après '+go.v+' manches')]);
   const cards=es.map(e=>{const pts=g.sc[e]||0;const playing=g.runEnt===e&&['play','result'].includes(g.phase);
     return h('div',{class:'score'+(playing?' lead':''),style:`--c:${G.entColor(g,e)}`},
       h('div',{class:'nm'},h('span',{class:'dot'}),h('span',{class:'t'},G.entName(g,e))),
@@ -819,7 +905,7 @@ function render(force){
   const st=h('main',{class:'stage'});app.append(st);
   const spect=S.mode==='online'&&!g.players.some(p=>p.id===ME.pid);
   if(spect)st.append(h('p',{class:'note'},'Partie en cours : tu regardes en spectateur.'));
-  const fn={vote:vVote,draw:vDraw,bet:vBet,reveal:vReveal,auction:vAuction,play:vPlay,result:vResult,end:vEnd}[g.phase];
+  const fn={vote:vVote,draw:vDraw,bet:vBet,reveal:vReveal,auction:vAuction,play:vPlay,turns:vTurns,result:vResult,end:vEnd}[g.phase];
   if(fn)upd=fn(g,st)||null;
   if(upd)upd(S.g);
 }
@@ -837,7 +923,8 @@ function lobby(g){
     h('div',{class:'row',style:'justify-content:space-between'},h('div',{class:'col',style:'gap:4px'},h('span',{class:'eyebrow'},'Code de la partie'),h('span',{class:'code'},S.code)),
       h('p',{style:'margin:0;font-weight:700;max-width:34ch'},'Tes amis ouvrent cette page, tapent ce code et cliquent sur Rejoindre.')),
     h('div',{class:'col'},h('span',{class:'eyebrow'},`Joueurs (${n}/${MAX_PLAYERS})`),list),
-    h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},'Mode de jeu'),seg('Mode',layouts(n),L.k,v=>{g.layout=v;g.layoutPicked=true;if(layoutOf(n,v).teams){const kk=layoutOf(n,v).teams;g.players.forEach((p,i)=>p.t=i%kk)}push();render(true)},!host)),
+    h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},'Façon de jouer'),seg('Façon de jouer',GMODES,g.gm||'pari',v=>{g.gm=v;LS.set('li-gm',v);push();render(true)},!host),h('span',{class:'muted',style:'font-size:14px;font-weight:700'},gmodeOf(g.gm).d)),
+    h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},'Équipes'),seg('Équipes',layouts(n),L.k,v=>{g.layout=v;g.layoutPicked=true;if(layoutOf(n,v).teams){const kk=layoutOf(n,v).teams;g.players.forEach((p,i)=>p.t=i%kk)}push();render(true)},!host)),
     h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},'Fin de partie'),h('div',{class:'goal-wrap'},seg('Objectif',GOALS.filter(x=>!x.hidden),g.goal,v=>{g.goal=v;LS.set('li-goal',v);push();render(true)},!host))),
     host?h('div',{class:'row'},h('button',{class:'btn big hot',disabled:n<2||!teamsOk,onclick:()=>{startGame(g);push();render(true)}},n<2?'En attente de joueurs':'Lancer la partie'),
       !teamsOk?h('span',{class:'muted',style:'font-weight:700'},'Les équipes doivent avoir le même nombre de joueurs.'):null)
@@ -891,7 +978,7 @@ function vBet(g,st){
   const m=mine().filter(pid=>g.players.some(p=>p.id===pid));
   const todo=m.filter(pid=>{const b=actsOf(pid).bet;return!(b&&b.r===g.round)});
   st.append(themeBanner(g),h('div',{class:'phase-h'},h('div',{class:'col',style:'gap:4px'},h('span',{class:'eyebrow'},'Phase de pari'),h('h2',null,'Combien en cites-tu en '+BASE_TIME+' secondes ?'),
-    G.team(g)?h('p',{class:'muted',style:'margin:0;font-weight:700'},'Si ton pari est le plus haut, toute ton équipe joue la manche.'):null,
+    g.gm==='defi'?h('p',{class:'muted',style:'margin:0;font-weight:700'},'Tout le monde joue en même temps, chacun son pari. Raté : tes adversaires marquent tes points.'):G.team(g)?h('p',{class:'muted',style:'margin:0;font-weight:700'},'Si ton pari est le plus haut, toute ton équipe joue la manche.'):null,
     g.solo?h('p',{class:'muted',style:'margin:0;font-weight:700'},'Pari tenu : tu gagnes ton pari. Raté : tu perds l’écart entre ton pari et ton résultat.'):null),tm));
   const body=h('section',{class:'card col',style:'gap:16px'});
   if(S.mode==='local'&&!g.solo){
@@ -923,6 +1010,8 @@ function vBet(g,st){
 }
 /* --- révélation --- */
 function vReveal(g,st){
+  if(g.gm==='defi'){st.append(themeBanner(g),h('div',{class:'phase-h'},h('div',{class:'col',style:'gap:4px'},h('span',{class:'eyebrow'},'Révélation'),h('h2',null,'Chacun tente son pari !'))),
+      h('div',{class:'bets'},g.players.map((p,i)=>h('div',{class:'betcard',style:`animation-delay:${i*.15}s`},h('span',{class:'dot',style:`--c:${COLORS[p.c%6]}`}),h('b',null,p.n),h('span',{class:'n'},g.bets[p.id])))));sfx.tick();return}
   const max=Math.max(...Object.values(g.bets));
   st.append(themeBanner(g),
     h('div',{class:'phase-h'},h('div',{class:'col',style:'gap:4px'},h('span',{class:'eyebrow'},'Révélation'),
@@ -946,37 +1035,41 @@ function vAuction(g,st){
 }
 /* --- manche : saisie + fil des réponses en direct --- */
 function vPlay(g,st){
-  const th=TH[g.theme];const mem=G.runMembers(g);
+  const th=TH[g.theme];const defi=g.gm==='defi';
+  const mem=defi?g.players.map(p=>p.id):G.runMembers(g);
   const typers=mem.filter(isMine);
-  const team=mem.length>1;
+  const team=!defi&&mem.length>1;
   for(const pid of typers)if(!S.ans[pid]||S.ans[pid].r!==g.round)S.ans[pid]={r:g.round,att:[],done:false};
   if(S.mode==='local'&&(!S.localTyper||!typers.includes(S.localTyper)))S.localTyper=typers[0];
-  const tm=timerEl();const big=h('div',{class:'big-count'},h('span',{class:'a'},'0'),h('span',{class:'b'},'/ '+g.bet));
+  const author=()=>S.mode==='local'?S.localTyper:ME.pid;
+  const memOf=()=>defi?[author()]:mem;const tgt=()=>defi?(S.g.bets[author()]||1):g.bet;
+  const tm=timerEl();const big=h('div',{class:'big-count'},h('span',{class:'a'},'0'),h('span',{class:'b'},'/ '+(typers.length?tgt():g.bet||'')));
+  const board=defi?h('div',{class:'chips progress'}):null;
   const bonusLine=h('div',{class:'bonus-line',hidden:!(g.bonus&&g.bonus.on)},'★ Réponses rares : 0 (+0 pt si le pari est tenu)');
   const fb=h('div',{class:'fb','aria-live':'polite'});const cd=h('div',{class:'countdown'});
   const feedEl=h('div',{class:'feed','aria-live':'polite'});
   const mods=[];if(g.dur!==BASE_TIME)mods.push(g.dur+' s');if(g.mult>1)mods.push('points ×'+g.mult);
   st.append(themeBanner(g),h('div',{class:'phase-h'},h('div',{class:'col',style:'gap:4px'},h('span',{class:'eyebrow'},'Manche '+g.round+(mods.length?' · '+mods.join(' · '):'')),
-    h('h2',null,typers.length?(S.mode==='local'?runnerLabel(g)+', à vous !':team?'À ton équipe ! Tapez vite':'À toi ! Tape vite'):runnerLabel(g)+(team?' jouent…':' joue…'))),tm));
+    h('h2',null,defi?(typers.length?'Tous en piste ! Réalise ton pari':'Tout le monde joue…'):typers.length?(S.mode==='local'?runnerLabel(g)+', à vous !':team?'À ton équipe ! Tapez vite':'À toi ! Tape vite'):runnerLabel(g)+(team?' jouent…':' joue…'))),tm));
   const card=h('section',{class:'card col',style:'gap:14px'});
   let inp=null;
-  const author=()=>S.mode==='local'?S.localTyper:ME.pid;
   const publish=pid=>{const a=S.ans[pid];act(pid,'ans',{r:a.r,att:a.att.slice(-60),done:a.done})};
   const tryAnswer=(raw,quiet)=>{
     const pid=author();const a=S.ans[pid];if(!a||a.done||hostNow()<g.st||hostNow()>=g.dl)return false;
-    const taken=new Set(pooled(S.g));const m=match(th,raw,taken);
+    const taken=new Set(pooled(S.g,memOf()));const m=match(th,raw,taken);
+    if(m&&quiet&&taken.has(m.c))return false;
     if(m){if(taken.has(m.c)){fb.className='fb dup';fb.textContent='Déjà dit : '+m.c;sfx.ko()}
       else{const rare=isRare(S.g,th,m.c);fb.className='fb ok';fb.textContent='✓ '+m.c+(rare?' ★ rare !':'')+(m.fuzzy?' (on accepte la faute)':'');rare?sfx.rare():sfx.ok()}
       a.att.push([raw.slice(0,40),m.c,hostNow()])}
     else{if(quiet)return false;a.att.push([raw.slice(0,40),'',hostNow()]);fb.className='fb ko';fb.textContent='✗ '+raw+' n’est pas dans la liste';sfx.ko()}
-    if(pooled(S.g).length>=g.bet)a.done=true;
+    if(pooled(S.g,memOf()).length>=tgt())a.done=true;
     publish(pid);if(S.isHost)step();return !!m;
   };
   if(typers.length){
     inp=h('input',{class:'inp',id:'answer',autocomplete:'off',autocorrect:'off',autocapitalize:'off',spellcheck:'false',placeholder:team?'Tape une réponse, ton équipe la voit':'Tape une réponse puis Entrée',disabled:true});
     const submit=()=>{const parts=inp.value.split(/[,;\n]+/).map(s=>s.trim()).filter(Boolean);inp.value='';for(const p of parts)tryAnswer(p,false)};
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submit()}});
-    if(S.mode==='local'&&typers.length>1)card.append(h('div',{class:'row'},h('span',{class:'lbl'},'Qui tape ?'),seg('Qui tape',typers.map(p=>({k:p,l:G.name(g,p)})),S.localTyper,v=>{S.localTyper=v;card.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===G.name(g,v))));inp.focus()})));
+    if(S.mode==='local'&&typers.length>1)card.append(h('div',{class:'row'},h('span',{class:'lbl'},'Qui tape ?'),seg('Qui tape',typers.map(p=>({k:p,l:G.name(g,p)})),S.localTyper,v=>{S.localTyper=v;card.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===G.name(g,v))));lastK='';const a=S.ans[v];inp.disabled=!!(a&&a.done)||hostNow()<g.st||hostNow()>=g.dl;fb.textContent='';inp.focus()})));
     card.append(h('div',{class:'answer-box'},inp,h('button',{class:'btn hot',onclick:()=>{submit();inp.focus()}},'Valider')),fb);
     const voice=!team&&window.LI_VOICE?makeVoice():null;
     if(voice){
@@ -984,16 +1077,14 @@ function vPlay(g,st){
       const tog=h('button',{class:'btn sm '+(voiceOn()?'blue':'alt')},voiceOn()?'Micro : activé':'Micro : désactivé');
       tog.onclick=()=>{LS.set('li-voice',!voiceOn());tog.textContent=voiceOn()?'Micro : activé':'Micro : désactivé';tog.className='btn sm '+(voiceOn()?'blue':'alt');if(voiceOn()&&hostNow()>=g.st&&hostNow()<g.dl)voice.start();else voice.stop()};
       card.append(h('div',{class:'mic'},tog,live,h('span',{class:'muted',style:'font-weight:700;font-size:14px'},'Dis les réponses à voix haute, le jeu les reconnaît.')),heard);
-      voice.onText=text=>{heard.textContent='Entendu : « '+text+' »';
-        const words=text.trim().split(/\s+/);let i=0;
-        while(i<words.length){let hit=false;
-          for(let L=Math.min(5,words.length-i);L>=1;L--){const ph=words.slice(i,i+L).join(' ');if(!th.rule&&norm(ph).length<3)continue;if(match(th,ph,new Set(pooled(S.g)))){tryAnswer(ph,true);i+=L;hit=true;break}}
-          if(!hit)i++}};
+      /* on analyse aussi les résultats provisoires : chaque réponse est validée dès qu'elle est reconnue, sans attendre la fin de la phrase */
+      voice.onText=(text,fin)=>{heard.textContent=(fin?'Entendu : « ':'… « ')+text+' »';
+        for(const ph of voicePhrases(th,text))tryAnswer(ph,true)};
       voice.onState=on=>{live.hidden=!on};
       S.voice=voice;
     }else S.voice=null;
   }
-  card.append(big,bonusLine,h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},team?'Fil de l’équipe, en direct':'Réponses, en direct'),feedEl));
+  card.append(big,bonusLine,board?h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},'Où en est tout le monde'),board):null,h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},team?'Fil de l’équipe, en direct':typers.length?'Tes réponses, en direct':'Réponses, en direct'),feedEl));
   st.append(cd,card);
   let lastK='',started=false,lastSec=-1;
   return g=>{
@@ -1003,10 +1094,13 @@ function vPlay(g,st){
       if(inp&&!started){started=true;inp.disabled=false;inp.focus();if(S.voice&&voiceOn())S.voice.start()}
       const sec=Math.ceil((g.dl-t)/1000);if(sec!==lastSec){lastSec=sec;if(sec<=5&&sec>0)sfx.tick()}
       if(t>=g.dl){for(const pid of typers){const a=S.ans[pid];if(a&&!a.done){a.done=true;publish(pid)}}if(inp)inp.disabled=true;if(S.voice)S.voice.stop()}}
-    const f=feed(g);const k=f.length+'|'+(g.bonus&&g.bonus.on?g.bonus.common.length:'x');
-    if(k!==lastK){lastK=k;const n=pooled(g).length;big.firstChild.textContent=n;big.classList.toggle('win',n>=g.bet);
-      if(n>=g.bet&&inp){inp.disabled=true;fb.className='fb ok';fb.textContent='Pari atteint !'}
-      if(g.bonus&&g.bonus.on){const rc=pooled(g).filter(c=>isRare(g,th,c)).length;bonusLine.hidden=false;bonusLine.textContent='★ Réponses rares : '+rc+' (+'+rc*(g.mult||1)+' pt'+(rc>1?'s':'')+' si le pari est tenu)'}
+    if(board){const bk=g.players.map(p=>pooled(g,[p.id]).length).join(',');if(bk!==board._k){board._k=bk;
+      board.replaceChildren(...g.players.map(p=>{const n=pooled(g,[p.id]).length,b=g.bets[p.id]||1;return h('span',{class:'chip '+(n>=b?'ok':'')},h('span',{class:'dot',style:`--c:${COLORS[p.c%6]}`}),p.n+' '+n+' / '+b+(n>=b?' ✓':''))}))}}
+    if(defi&&!typers.length)return;
+    const f=feed(g,memOf());const k=author()+'|'+f.length+'|'+(g.bonus&&g.bonus.on?g.bonus.common.length:'x');
+    if(k!==lastK){lastK=k;const n=pooled(g,memOf()).length;const T=defi?tgt():g.bet;big.firstChild.textContent=n;big.lastChild.textContent='/ '+T;big.classList.toggle('win',n>=T);
+      if(n>=T&&inp){inp.disabled=true;fb.className='fb ok';fb.textContent='Pari atteint !'}
+      if(g.bonus&&g.bonus.on){const rc=pooled(g,memOf()).filter(c=>isRare(g,th,c)).length;bonusLine.hidden=false;bonusLine.textContent='★ Réponses rares : '+rc+' (+'+rc*(g.mult||1)+' pt'+(rc>1?'s':'')+' si le pari est tenu)'}
       feedEl.replaceChildren(...f.slice(-80).map(x=>h('div',{class:'msg '+(x.c?(x.dup?'dup':'ok'):'ko')},
         team?h('span',{class:'who',style:`--c:${G.color(g,x.p)}`},G.name(g,x.p)):null,
         h('span',{class:'txt'},x.w),
@@ -1015,9 +1109,74 @@ function vPlay(g,st){
   };
 }
 
+/* --- manche « Chacun son tour » --- */
+function vTurns(g,st){
+  const th=TH[g.theme];const cd=h('div',{class:'countdown'});
+  const title=h('h2',null,'');const sub=h('p',{class:'muted',style:'margin:0;font-weight:700'},'Une réponse chacun son tour. Erreur, répétition ou réserve de temps vide : éliminé de la manche.');
+  const boardEl=h('div',{class:'turnboard'});const cards={};
+  for(const pid of g.turn.order){const clk=h('span',{class:'clk'},'30');const bar=h('i');const pts=h('span',{class:'tp'},'0 pt');const stt=h('span',{class:'ts'},'');
+    const c=h('div',{class:'tcard',style:`--c:${G.color(g,pid)}`},h('div',{class:'nm'},h('span',{class:'dot'}),h('b',null,G.name(g,pid))),h('div',{class:'row',style:'gap:8px;align-items:baseline'},clk,pts),h('div',{class:'bar'},bar),stt);
+    cards[pid]={c,clk,bar,pts,stt};boardEl.append(c)}
+  const fb=h('div',{class:'fb','aria-live':'polite'});const feedEl=h('div',{class:'feed','aria-live':'polite'});
+  const inp=h('input',{class:'inp',id:'answer',autocomplete:'off',autocorrect:'off',autocapitalize:'off',spellcheck:'false',placeholder:'Ta réponse, puis Entrée',disabled:true});
+  const anyMine=g.turn.order.some(isMine);
+  let sentK=-1;
+  const myTurn=()=>{const G2=S.g,T=G2&&G2.turn;if(!T||G2.phase!=='turns')return false;const cur=T.order[T.cur];return isMine(cur)&&T.alive[cur]&&hostNow()>=T.since&&sentK!==T.k};
+  const send=w=>{w=String(w||'').trim();if(!w||!myTurn())return;const T=S.g.turn;const cur=T.order[T.cur];sentK=T.k;inp.value='';inp.disabled=true;act(cur,'tp',{r:S.g.round,k:T.k,w:w.slice(0,40)});if(S.isHost)step()};
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();send(inp.value)}});
+  const card=h('section',{class:'card col',style:'gap:14px'});
+  if(anyMine)card.append(h('div',{class:'answer-box'},inp,h('button',{class:'btn hot',onclick:()=>{send(inp.value);inp.focus()}},'Valider')),fb);
+  const voice=anyMine&&window.LI_VOICE?makeVoice():null;
+  if(voice){const live=h('span',{class:'live',hidden:true});const heard=h('div',{class:'heard'});
+    const tog=h('button',{class:'btn sm '+(voiceOn()?'blue':'alt')},voiceOn()?'Micro : activé':'Micro : désactivé');
+    tog.onclick=()=>{LS.set('li-voice',!voiceOn());tog.textContent=voiceOn()?'Micro : activé':'Micro : désactivé';tog.className='btn sm '+(voiceOn()?'blue':'alt');if(!voiceOn())voice.stop()};
+    card.append(h('div',{class:'mic'},tog,live,h('span',{class:'muted',style:'font-weight:700;font-size:14px'},'À ton tour, dis ta réponse : la première réponse reconnue est envoyée.')),heard);
+    voice.onText=(text,fin)=>{heard.textContent='… « '+text+' »';if(!myTurn())return;const ph=voicePhrases(th,text)[0];if(ph)send(ph)};
+    voice.onState=on=>{live.hidden=!on}}
+  card.append(h('div',{class:'col',style:'gap:6px'},h('span',{class:'eyebrow'},'Réponses, en direct'),feedEl));
+  st.append(themeBanner(g),h('div',{class:'phase-h'},h('div',{class:'col',style:'gap:4px'},h('span',{class:'eyebrow'},'Manche '+g.round+' · Chacun son tour'),title,sub)),cd,boardEl,card);
+  let lastK=-1;
+  return g=>{
+    const T=g.turn;if(!T)return;const t=hostNow();const cur=T.order[T.cur];
+    if(t<T.since){cd.hidden=false;const s=Math.ceil((T.since-t)/1000);if(cd.textContent!==String(s)){cd.textContent=s;sfx.tick()}}else cd.hidden=true;
+    for(const pid of T.order){const C=cards[pid];if(!C)continue;const left=Math.max(0,pid===cur&&t>=T.since?T.clock[pid]-(t-T.since):T.clock[pid]);
+      const sTxt=String(Math.ceil(left/1000));if(C.clk.textContent!==sTxt)C.clk.textContent=sTxt;C.bar.style.width=(left/CHAIN_MS*100)+'%';
+      C.c.classList.toggle('now',pid===cur&&!!T.alive[pid]);C.c.classList.toggle('out',!T.alive[pid]);C.c.classList.toggle('low',pid===cur&&left<5000)}
+    if(T.k!==lastK){lastK=T.k;
+      for(const pid of T.order){const C=cards[pid];if(!C)continue;C.pts.textContent=(T.pts[pid]||0)+' pt'+((T.pts[pid]||0)>1?'s':'');C.stt.textContent=!T.alive[pid]?'Éliminé':pid===cur?'À son tour':''}
+      title.replaceChildren(T.alive[cur]?(isMine(cur)?(S.mode==='local'?G.name(g,cur)+', à toi !':'À toi de répondre !'):'Au tour de '+G.name(g,cur)):'');
+      const last=T.log[T.log.length-1];
+      if(last&&isMine(last.p)){if(last.x==='ok'){fb.className='fb ok';fb.textContent='✓ '+last.c+(last.rare?' ★ rare !':'');last.rare?sfx.rare():sfx.ok()}else{fb.className='fb ko';fb.textContent=last.x==='time'?'Temps écoulé : éliminé':last.x==='dup'?'Déjà dit : éliminé':'✗ « '+last.w+' » n’est pas dans la liste : éliminé';sfx.ko()}}
+      else if(last){last.x==='ok'?sfx.tick():sfx.ko()}
+      feedEl.replaceChildren(...T.log.map(x=>h('div',{class:'msg '+(x.x==='ok'?'ok':x.x==='dup'?'dup':'ko')},h('span',{class:'who',style:`--c:${G.color(g,x.p)}`},G.name(g,x.p)),h('span',{class:'txt'},x.x==='time'?'(temps écoulé)':x.w),
+        h('span',{class:'res'},x.x==='ok'?'✓ '+x.c+(x.rare?' ★':''):x.x==='dup'?'déjà dit : éliminé':x.x==='time'?'éliminé':'✗ éliminé'))));feedEl.scrollTop=feedEl.scrollHeight;
+    }
+    const mt=myTurn();if(inp.disabled===mt){inp.disabled=!mt;if(mt){inp.focus()}}
+    if(voice){if(mt&&voiceOn())voice.start();else if(!mt&&voice.want)voice.stop()}
+  };
+}
+
 /* --- résultat --- */
 function vResult(g,st){
-  const R=g.res;(R.ok?sfx.win:sfx.lose)();
+  const R=g.res;
+  if(R.mode==='defi'||R.mode==='chaine'){sfx.win();
+    const nextBtn=S.isHost?h('button',{class:'btn hot',onclick:()=>{S.hostNext=true;step();render(true)}},'Manche suivante'):null;const tm=timerEl();
+    const gainsTxt=Object.entries(R.gains).filter(([,p])=>p>0).map(([e,p])=>'+'+p+' pour '+G.entName(g,e)).join(' · ');
+    const rows=R.mode==='defi'?R.per.map(x=>h('div',{class:'rrow '+(x.ok?'ok':'ko')},pname(g,x.p),h('span',null,'Pari '+x.bet),h('span',null,x.found+' trouvée'+(x.found>1?'s':'')),
+        h('b',null,x.ok?'Tenu'+(x.rare?' · ★ +'+x.rare:''):'Raté')))
+      :g.players.slice().sort((a,b)=>(R.pts[b.id]||0)-(R.pts[a.id]||0)).map(p=>h('div',{class:'rrow ok'},pname(g,p.id),h('b',null,'+'+(R.pts[p.id]||0)+' pt'+((R.pts[p.id]||0)>1?'s':''))));
+    const found=R.mode==='defi'?[...new Set(R.per.flatMap(x=>x.list))]:R.list;
+    st.append(themeBanner(g),
+      h('section',{class:'card col',style:'gap:14px;align-items:center;text-align:center'},
+        h('div',{class:'verdict ok',style:'font-size:clamp(32px,7vw,56px)'},R.mode==='defi'?'Résultats des paris':'Fin de la chaîne'),
+        h('div',{class:'rtable'},rows),
+        h('p',{class:'gain'},gainsTxt||'Aucun point'),
+        h('div',{class:'row',style:'justify-content:center'},nextBtn,tm)),
+      h('div',{class:'grid2'},
+        h('section',{class:'card col'},h('span',{class:'eyebrow'},'Trouvées'),h('div',{class:'chips'},found.length?found.map(c=>h('span',{class:'chip ok'},c+((R.rare||[]).includes(c)?' ★':''))):h('span',{class:'muted'},'Aucune'))),
+        h('section',{class:'card col'},h('span',{class:'eyebrow'},'Les plus citées que vous avez ratées'),h('div',{class:'chips'},R.missed.map(c=>h('span',{class:'chip'},c))))));
+    return g=>tm.set(g.dl-hostNow(),RESULT_MS)}
+  (R.ok?sfx.win:sfx.lose)();
   const gainsTxt=g.solo?((R.gains[g.runEnt]>=0?'+':'−')+Math.abs(R.gains[g.runEnt])+' pt'+(Math.abs(R.gains[g.runEnt])>1?'s':'')+(R.ok?'':' (il manquait '+(g.bet-R.found)+' réponse'+(g.bet-R.found>1?'s':'')+')')):Object.entries(R.gains).map(([e,p])=>'+'+p+' pour '+G.entName(g,e)).join(' · ');
   const nextBtn=S.isHost?h('button',{class:'btn hot',onclick:()=>{S.hostNext=true;step();render(true)}},'Manche suivante'):null;
   const tm=timerEl();const team=G.team(g);
@@ -1056,6 +1215,15 @@ function vEnd(g,st){
 }
 
 /* --- reconnaissance vocale (site autonome, joueur seul) --- */
+const SR_OK=!!(window.SpeechRecognition||window.webkitSpeechRecognition);
+/* découpe une phrase entendue en réponses reconnues (groupes de 1 à 5 mots, le plus long d'abord) */
+function voicePhrases(th,text){
+  const words=String(text).trim().split(/[\s,;.!?]+/).filter(Boolean);const out=[];let i=0;
+  while(i<words.length){let hit=false;
+    for(let L=Math.min(5,words.length-i);L>=1;L--){const ph=words.slice(i,i+L).join(' ');if(!th.rule&&norm(ph).length<3)continue;if(match(th,ph)){out.push(ph);i+=L;hit=true;break}}
+    if(!hit)i++}
+  return out;
+}
 const voiceOn=()=>LS.get('li-voice',false);
 let curVoice=null;
 function makeVoice(){
@@ -1066,11 +1234,11 @@ function makeVoice(){
   v.stop=()=>{v.want=false;try{v.rec&&v.rec.abort()}catch(e){}v.onState&&v.onState(false)};
   function run(){
     if(!v.want)return;
-    const r=new SR();v.rec=r;r.lang='fr-FR';r.continuous=true;r.interimResults=false;r.maxAlternatives=1;
-    r.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal&&v.onText)v.onText(e.results[i][0].transcript)};
+    const r=new SR();v.rec=r;r.lang='fr-FR';r.continuous=true;r.interimResults=true;r.maxAlternatives=1;
+    r.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){const res=e.results[i];if(v.onText)v.onText(res[0].transcript,res.isFinal)}};
     r.onstart=()=>v.onState&&v.onState(true);
     r.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){v.want=false;toast('Micro refusé : autorise-le dans ton navigateur, ou tape tes réponses.')}};
-    r.onend=()=>{v.onState&&v.onState(false);if(v.want)setTimeout(run,150)};
+    r.onend=()=>{v.onState&&v.onState(false);if(v.want)setTimeout(run,0)};
     try{r.start()}catch(e){}
   }
   curVoice=v;return v;

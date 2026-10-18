@@ -41,10 +41,11 @@ Pense à regarder dans les spams si l'e-mail d'activation n'arrive pas.
 
 ## Jouer
 
-- **En ligne** : un joueur clique sur « Créer une partie », choisit le mode (chacun pour soi, 2 contre 2, 3 contre 3, 2 contre 2 contre 2) et la fin de partie, puis donne le code à 4 lettres. Les autres le tapent et cliquent sur « Rejoindre ».
+- **Trois façons de jouer**, au choix dans le salon : « Le plus gros pari », « Chacun son pari » (tout le monde tente son propre pari en même temps) et « Chacun son tour » (une réponse chacun son tour, 30 s de réserve, éliminé à la première erreur).
+- **En ligne** : un joueur clique sur « Créer une partie », choisit la façon de jouer, le mode (chacun pour soi, 2 contre 2, 3 contre 3, 2 contre 2 contre 2) et la fin de partie, puis donne le code à 4 lettres. Les autres le tapent et cliquent sur « Rejoindre ».
 - **Solo** : atteindre 80 points en un minimum de manches. Le record est gardé sur l'appareil.
 - **Un seul écran** : on se passe l'appareil.
-- **Mode vocal** : sur l'accueil, « À la voix (micro) ». Ne sert que quand on joue seul la manche (en équipe, on écrit). Fonctionne dans Chrome, Edge et Safari, sur l'adresse https.
+- **Mode vocal** : sur l'accueil, « À la voix (micro) ». Ne sert que quand on joue seul la manche (en équipe, on écrit). Fonctionne dans Chrome, Edge et Safari, sur l'adresse https. Firefox ne gère pas la reconnaissance vocale : le site l'indique et le clavier reste disponible.
 
 ## Lancer en local (optionnel)
 
